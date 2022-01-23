@@ -764,7 +764,7 @@ static void *SV_LoadGameLibrary(const char *game, const char *prefix)
 
     if (Q_concat(path, sizeof(path), sys_libdir->string,
                  PATH_SEP_STRING, game, PATH_SEP_STRING,
-                 prefix, "game" CPUSTRING LIBSUFFIX) >= sizeof(path)) {
+                 prefix, "game-" CPUSTRING LIBSUFFIX) >= sizeof(path)) {
         Com_EPrintf("Game library path length exceeded\n");
         return NULL;
     }

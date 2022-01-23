@@ -1,12 +1,6 @@
-cmake_minimum_required (VERSION 3.9)
-cmake_policy(SET CMP0069 NEW)
-
-if (UNIX)
-	FIND_PACKAGE(OpenAL)
-	if (NOT OPENAL_INCLUDE_DIR)
-		message(FATAL_ERROR "Can't find OpenAL. Please install the libopenal-dev package.")
-	endif()
-endif()
+#
+#
+#
 
 SET(SRC_BASEQ2
 	baseq2/g_ai.c
@@ -305,7 +299,7 @@ SET(HEADERS_VKPT
 	refresh/vkpt/conversion.h
 )
 
-set(SRC_SHADERS
+set(SHADERS_VKPT
 	refresh/vkpt/shader/animate_materials.comp
 	refresh/vkpt/shader/god_rays_filter.comp
 	refresh/vkpt/shader/god_rays.comp
@@ -340,7 +334,7 @@ set(SRC_SHADERS
 	refresh/vkpt/shader/fsr_rcas_fp32.comp
 )
 
-set(SRC_RT_SHADERS
+set(SHADERS_RTX
 	refresh/vkpt/shader/primary_rays.rgen
 	refresh/vkpt/shader/direct_lighting.rgen
 	refresh/vkpt/shader/indirect_lighting.rgen
@@ -355,29 +349,117 @@ set(SRC_RT_SHADERS
 	refresh/vkpt/shader/reflect_refract.rgen
 )
 
+set(SHADERS_VKPT_DEPS
+    refresh/vkpt/shader/asvgf.glsl
+    refresh/vkpt/shader/brdf.glsl
+    refresh/vkpt/shader/constants.h
+    refresh/vkpt/shader/fsr_easu.glsl
+    refresh/vkpt/shader/fsr_rcas.glsl
+    refresh/vkpt/shader/fsr_utils.glsl
+    refresh/vkpt/shader/global_textures.h
+    refresh/vkpt/shader/global_ubo.h
+    refresh/vkpt/shader/god_rays_shared.h
+    refresh/vkpt/shader/light_lists.h
+    refresh/vkpt/shader/path_tracer_rgen.h
+    refresh/vkpt/shader/path_tracer.h
+    refresh/vkpt/shader/path_tracer_hit_shaders.h
+    refresh/vkpt/shader/path_tracer_transparency.glsl
+    refresh/vkpt/shader/precomputed_sky.glsl
+    refresh/vkpt/shader/precomputed_sky_params.h
+    refresh/vkpt/shader/projection.glsl
+    refresh/vkpt/shader/sky.h
+    refresh/vkpt/shader/tiny_encryption_algorithm.h
+    refresh/vkpt/shader/tone_mapping_utils.glsl
+    refresh/vkpt/shader/utils.glsl
+    refresh/vkpt/shader/vertex_buffer.h
+    refresh/vkpt/shader/water.glsl)
+
+# ======================================================================
+# VKPT and RTX Shaders
+# ======================================================================
+
 # Only build shaders in 64-bit builds, because the client
 # is also only built for 64-bit systems.
-IF(IS_64_BIT)
-    include(../cmake/compileShaders.cmake)
+IF(CONFIG_VKPT_RENDERER)
+	set (shader_outdir "${Q2RTX_OUTPUT_DIR}/baseq2/shader_vkpt")
 
-    foreach(s ${SRC_RT_SHADERS})
-        get_filename_component(shader_name ${s} NAME)
-        get_filename_component(shader_ext ${s} EXT)
-        compile_shader(SOURCE_FILE ${s} OUTPUT_FILE_LIST shader_bytecode OUTPUT_FILE_NAME "${shader_name}.pipeline")
-        if (shader_ext STREQUAL ".rgen")
-            compile_shader(SOURCE_FILE ${s} OUTPUT_FILE_LIST shader_bytecode OUTPUT_FILE_NAME "${shader_name}.query" DEFINES "-DKHR_RAY_QUERY" STAGE "comp")
-        endif()
-    endforeach()
+	function(compile_vkpt_shader)
+		set(options "")
+		set(oneValueArgs SOURCE_FILE OUTPUT_FILE_NAME OUTPUT_FILE_LIST OUTPUT_SUFFIX STAGE)
+		set(multiValueArgs DEFINES INCLUDES)
+		cmake_parse_arguments(params "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+		if (NOT params_SOURCE_FILE)
+			message(FATAL_ERROR "compile_vk_shader: SOURCE_FILE argument missing")
+		endif()
+		if (NOT params_OUTPUT_FILE_LIST)
+			message(FATAL_ERROR "compile_vk_shader: OUTPUT_FILE_LIST argument missing")
+		endif()
+		set(src_file "${CMAKE_CURRENT_SOURCE_DIR}/${params_SOURCE_FILE}")
+		if (params_OUTPUT_FILE_NAME)
+			set(output_file_name ${params_OUTPUT_FILE_NAME})
+		else()
+			get_filename_component(output_file_name ${src_file} NAME)
+		endif()
+		if (params_OUTPUT_SUFFIX)
+			set(output_file_name "${output_file_name}${params_OUTPUT_SUFFIX}")
+		else()
+			set(output_file_name "${output_file_name}.spv")
+		endif()
+		if (params_STAGE)
+			set(stage -S ${params_STAGE})
+		else()
+			set(stage)
+		endif()
+		set_source_files_properties(${src_file} PROPERTIES VS_TOOL_OVERRIDE "None")
+		set (out_file "${shader_outdir}/${output_file_name}")
+		set(glslang_command_line
+				${stage}
+				--target-env vulkan1.2
+				--quiet
+				-DVKPT_SHADER
+				-V
+				${params_DEFINES}
+				${params_INCLUDES}
+				"${src_file}"
+				-o "${out_file}")
+		add_custom_command(OUTPUT ${out_file}
+						DEPENDS ${src_file}
+						DEPENDS ${SHADER_SOURCE_DEPENDENCIES}
+						MAIN_DEPENDENCY ${src_file}
+						COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_outdir}
+						COMMAND ${GLSLANG_COMPILER} ${glslang_command_line})
+		
+		set(${params_OUTPUT_FILE_LIST} ${${params_OUTPUT_FILE_LIST}} ${out_file} PARENT_SCOPE)
+	endfunction()
 
-    foreach(s ${SRC_SHADERS})
-        compile_shader(SOURCE_FILE ${s} INCLUDES "-I${CMAKE_CURRENT_SOURCE_DIR}/refresh/vkpt/fsr" OUTPUT_FILE_LIST shader_bytecode)
-    endforeach()
+	# build RTX shaders
+	set(rtx_shader_bytecode)
+	foreach(shader_file ${SHADERS_RTX})
+		get_filename_component(shader_ext ${shader_file} EXT)
+		compile_vkpt_shader(
+			SOURCE_FILE "${shader_file}"
+			OUTPUT_FILE_LIST rtx_shader_bytecode
+			OUTPUT_SUFFIX ".pipeline.spv")
+		if (shader_ext STREQUAL ".rgen")
+			compile_vkpt_shader(
+				SOURCE_FILE "${shader_file}"
+				OUTPUT_FILE_LIST rtx_shader_bytecode
+				OUTPUT_SUFFIX ".query.spv"
+				DEFINES "-DKHR_RAY_QUERY"
+				STAGE "comp")
+		endif()
+	endforeach()
+	add_custom_target(rtx_shaders DEPENDS ${rtx_shader_bytecode})
 
-    add_custom_target(shaders DEPENDS ${shader_bytecode})
-
-    if(TARGET glslangValidator)
-        add_dependencies(shaders glslangValidator)
-    endif()
+    # build VKPT shaders
+	set(vkpt_shader_bytecode)
+	foreach(shader_file ${SHADERS_VKPT})
+		compile_vkpt_shader(
+			SOURCE_FILE "${shader_file}"
+			INCLUDES "-I${CMAKE_CURRENT_SOURCE_DIR}/refresh/vkpt/fsr"
+			OUTPUT_FILE_LIST vkpt_shader_bytecode)
+	endforeach()
+	add_custom_target(vkpt_shaders DEPENDS ${vkpt_shader_bytecode})
 ENDIF()
 
 # Embed version number
@@ -387,95 +469,209 @@ ADD_DEFINITIONS(-DVERSION_POINT=${Q2RTX_VERSION_POINT})
 ADD_DEFINITIONS(-DVERSION_SHA=${Q2RTX_VERSION_SHA})
 ADD_DEFINITIONS(-DVERSION_BRANCH=${Q2RTX_VERSION_BRANCH})
 
-ADD_DEFINITIONS(-DHAVE_CONFIG_H=1 -DCURL_STATICLIB)
+ADD_DEFINITIONS(-DHAVE_CONFIG_H=1)
 
 IF(WIN32)
 	ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS)
 ENDIF()
 
-ADD_LIBRARY(baseq2 SHARED ${SRC_BASEQ2} ${HEADERS_BASEQ2} ${SRC_SHARED})
+# ======================================================================
+# Baseq2 game module
+# ======================================================================
+
+ADD_LIBRARY(baseq2 SHARED
+	${SRC_BASEQ2}
+	${HEADERS_BASEQ2}
+	${SRC_SHARED})
+
+SET_TARGET_PROPERTIES(baseq2
+    PROPERTIES
+	OUTPUT_NAME "game-${Q2RTX_CPUSTRING}"
+    LIBRARY_OUTPUT_DIRECTORY "${Q2RTX_OUTPUT_DIR}/baseq2"
+    LIBRARY_OUTPUT_DIRECTORY_DEBUG "${Q2RTX_OUTPUT_DIR}/baseq2"
+    LIBRARY_OUTPUT_DIRECTORY_RELEASE "${Q2RTX_OUTPUT_DIR}/baseq2"
+    LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO "${Q2RTX_OUTPUT_DIR}/baseq2"
+    LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL "${Q2RTX_OUTPUT_DIR}/baseq2"
+    RUNTIME_OUTPUT_DIRECTORY "${Q2RTX_OUTPUT_DIR}/baseq2"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${Q2RTX_OUTPUT_DIR}/baseq2"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${Q2RTX_OUTPUT_DIR}/baseq2"
+    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${Q2RTX_OUTPUT_DIR}/baseq2"
+    RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${Q2RTX_OUTPUT_DIR}/baseq2"
+    PREFIX ""
+    DEBUG_POSTFIX "")
+
+TARGET_INCLUDE_DIRECTORIES(baseq2 PRIVATE
+	"${CMAKE_SOURCE_DIR}/inc")
 
 IF(WIN32)
-    IF(IS_64_BIT)
-        ADD_EXECUTABLE(client WIN32 
-            ${SRC_CLIENT} ${HEADERS_CLIENT} 
-            ${SRC_COMMON} ${HEADERS_COMMON} 
-            ${SRC_REFRESH} ${SRC_SHADERS} 
-            ${SRC_SHARED} 
-            ${SRC_WINDOWS} ${SRC_WINDOWS_CLIENT} ${HEADERS_WINDOWS}
-            ${SRC_SERVER} ${HEADERS_SERVER}
-            windows/res/q2rtx.rc
-        )
-    ENDIF()
-    ADD_EXECUTABLE(server 
-        ${SRC_COMMON} ${HEADERS_COMMON} 
-        ${SRC_SHARED} 
-        ${SRC_WINDOWS} ${HEADERS_WINDOWS}
-        ${SRC_SERVER} ${HEADERS_SERVER}
-        server/ac.c
-        client/null.c
-        windows/res/q2rtxded.rc
-    )
+	TARGET_SOURCES(baseq2 PRIVATE
+		windows/res/baseq2.rc)
+	IF(MSVC)
+		TARGET_COMPILE_OPTIONS(baseq2 PRIVATE /wd4005 /wd4996)
+	ENDIF()
 ELSE()
-    IF(IS_64_BIT)
-        ADD_EXECUTABLE(client
-            ${SRC_CLIENT} ${HEADERS_CLIENT} 
-            ${SRC_COMMON} ${HEADERS_COMMON} 
-            ${SRC_REFRESH} ${SRC_SHADERS} 
-            ${SRC_SHARED} 
-            ${SRC_LINUX} ${SRC_LINUX_CLIENT}
-            ${SRC_SERVER} ${HEADERS_SERVER}
-        )
-    ENDIF()
-    ADD_EXECUTABLE(server
-        ${SRC_COMMON} ${HEADERS_COMMON} 
-        ${SRC_SHARED} 
-        ${SRC_LINUX}
-        ${SRC_SERVER} ${HEADERS_SERVER}
-        server/ac.c
-        client/null.c
-    )
 ENDIF()
 
-TARGET_COMPILE_DEFINITIONS(server PRIVATE USE_SERVER=1 USE_CLIENT=0)
+# ======================================================================
+# Client
+# ======================================================================
 
-IF (TARGET client)
-    TARGET_COMPILE_DEFINITIONS(client PRIVATE USE_SERVER=1 USE_CLIENT=1)
+ADD_EXECUTABLE(client
+	${SRC_CLIENT} ${HEADERS_CLIENT} 
+	${SRC_COMMON} ${HEADERS_COMMON} 
+	${SRC_REFRESH}
+	${SRC_SHARED} 
+	${SRC_SERVER} ${HEADERS_SERVER})
 
-    IF(CONFIG_USE_CURL)
-        TARGET_SOURCES(client PRIVATE ${SRC_CLIENT_HTTP})
-        TARGET_COMPILE_DEFINITIONS(client PRIVATE USE_CURL=1)
-        TARGET_LINK_LIBRARIES(client libcurl)
-    ENDIF()
-
-    add_dependencies(client shaders)
-
-    IF (CONFIG_GL_RENDERER)
-        TARGET_SOURCES(client PRIVATE ${SRC_GL} ${HEADERS_GL})
-        TARGET_COMPILE_DEFINITIONS(client PRIVATE REF_GL=1 USE_REF=1)
-    ENDIF()
-
-    IF (CONFIG_VKPT_RENDERER)
-        TARGET_SOURCES(client PRIVATE ${SRC_VKPT} ${HEADERS_VKPT})
-        TARGET_INCLUDE_DIRECTORIES(client PRIVATE ${CMAKE_SOURCE_DIR}/extern/Vulkan-Headers/include)
-        LINK_DIRECTORIES(client PRIVATE ${CMAKE_SOURCE_DIR})
-        TARGET_COMPILE_DEFINITIONS(client PRIVATE REF_VKPT=1 USE_REF=1)
-        IF (CONFIG_VKPT_ENABLE_DEVICE_GROUPS)
-            TARGET_COMPILE_DEFINITIONS(client PRIVATE VKPT_DEVICE_GROUPS)
-        ENDIF()
-        if (CONFIG_VKPT_ENABLE_IMAGE_DUMPS)
-            TARGET_COMPILE_DEFINITIONS(client PRIVATE VKPT_IMAGE_DUMPS)
-        ENDIF()
-        IF (WIN32)
-        TARGET_LINK_LIBRARIES(client vulkan-1)
-        ELSE ()
-        TARGET_LINK_LIBRARIES(client vulkan)
-        ENDIF()
-    ENDIF()
-
-    TARGET_LINK_LIBRARIES(client stb)
-    TARGET_LINK_LIBRARIES(client tinyobjloader)
+IF(WIN32)
+	SET_TARGET_PROPERTIES(client
+		PROPERTIES
+		WIN32_EXECUTABLE TRUE)
+	TARGET_SOURCES(client PRIVATE
+		${SRC_WINDOWS_CLIENT}
+		${SRC_WINDOWS} ${HEADERS_WINDOWS}
+		windows/res/q2rtx.rc)
+ELSE()
+	TARGET_SOURCES(client PRIVATE
+		${SRC_LINUX} ${SRC_LINUX_CLIENT})
 ENDIF()
+
+TARGET_COMPILE_DEFINITIONS(client PRIVATE
+	USE_SERVER=1
+	USE_CLIENT=1)
+
+IF(CONFIG_USE_CURL)
+	TARGET_SOURCES(client PRIVATE
+		${SRC_CLIENT_HTTP})
+	TARGET_COMPILE_DEFINITIONS(client PRIVATE
+		USE_CURL=1)
+	TARGET_LINK_LIBRARIES(client PRIVATE
+		CURL::libcurl)
+ENDIF()
+
+IF (CONFIG_GL_RENDERER)
+	TARGET_SOURCES(client PRIVATE
+		${SRC_GL} ${HEADERS_GL})
+	TARGET_COMPILE_DEFINITIONS(client PRIVATE
+		REF_GL=1
+		USE_REF=1)
+ENDIF()
+
+IF (CONFIG_VKPT_RENDERER)
+	TARGET_SOURCES(client PRIVATE
+		${SRC_VKPT} ${HEADERS_VKPT})
+	TARGET_INCLUDE_DIRECTORIES(client PRIVATE
+		${VULKAN_INCLUDE})
+	TARGET_COMPILE_DEFINITIONS(client PRIVATE
+		REF_VKPT=1
+		USE_REF=1)
+	IF (CONFIG_VKPT_ENABLE_DEVICE_GROUPS)
+		TARGET_COMPILE_DEFINITIONS(client PRIVATE
+			VKPT_DEVICE_GROUPS)
+	ENDIF()
+	if (CONFIG_VKPT_ENABLE_IMAGE_DUMPS)
+		TARGET_COMPILE_DEFINITIONS(client PRIVATE
+			VKPT_IMAGE_DUMPS)
+	ENDIF()
+	TARGET_LINK_LIBRARIES(client PRIVATE ${VULKAN_LIBRARY})
+	ADD_DEPENDENCIES(client vkpt_shaders rtx_shaders)
+ENDIF()
+
+TARGET_INCLUDE_DIRECTORIES(client PRIVATE ../inc)
+
+SET_TARGET_PROPERTIES(client
+	PROPERTIES
+	OUTPUT_NAME "q2rtx"
+	RUNTIME_OUTPUT_DIRECTORY "${Q2RTX_OUTPUT_DIR}"
+	RUNTIME_OUTPUT_DIRECTORY_DEBUG "${Q2RTX_OUTPUT_DIR}"
+	RUNTIME_OUTPUT_DIRECTORY_RELEASE "${Q2RTX_OUTPUT_DIR}"
+	RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${Q2RTX_OUTPUT_DIR}"
+	RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${Q2RTX_OUTPUT_DIR}"
+	DEBUG_POSTFIX "")
+
+TARGET_LINK_LIBRARIES(client PRIVATE
+	OpenAL::OpenAL
+	stb
+	tinyobjloader
+	SDL2::SDL2
+	SDL2::SDL2main
+	ZLIB::ZLIB)
+
+IF(WIN32)
+	TARGET_LINK_LIBRARIES(client PRIVATE
+		winmm
+		ws2_32)
+
+	SET_TARGET_PROPERTIES(client PROPERTIES
+		VS_DEBUGGER_WORKING_DIRECTORY "${Q2RTX_OUTPUT_DIR}")
+
+	IF(MSVC)
+		TARGET_COMPILE_OPTIONS(client PRIVATE /wd4005 /wd4996)
+	ENDIF()
+ELSE()
+ENDIF()
+
+# ======================================================================
+# Server
+# ======================================================================
+
+ADD_EXECUTABLE(server
+	${SRC_COMMON} ${HEADERS_COMMON} 
+	${SRC_SHARED} 
+	${SRC_SERVER} ${HEADERS_SERVER}
+	server/ac.c
+	client/null.c)
+
+IF(WIN32)
+	TARGET_SOURCES(server PRIVATE
+		${SRC_WINDOWS} ${HEADERS_WINDOWS}
+		windows/res/q2rtxded.rc)
+ELSE()
+	TARGET_SOURCES(server PRIVATE
+		${SRC_LINUX})
+ENDIF()
+
+TARGET_COMPILE_DEFINITIONS(server PRIVATE
+	USE_SERVER=1
+	USE_CLIENT=0)
+
+TARGET_LINK_LIBRARIES(server PRIVATE
+	ZLIB::ZLIB)
+
+TARGET_INCLUDE_DIRECTORIES(server PRIVATE
+	"${CMAKE_SOURCE_DIR}/inc")
+
+SET_TARGET_PROPERTIES(server PROPERTIES
+	OUTPUT_NAME "q2rtxded"
+    RUNTIME_OUTPUT_DIRECTORY "${Q2RTX_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${Q2RTX_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${Q2RTX_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${Q2RTX_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${Q2RTX_OUTPUT_DIR}"
+    DEBUG_POSTFIX "")
+
+IF(WIN32)
+	TARGET_LINK_LIBRARIES(server PRIVATE
+		winmm
+		ws2_32)
+
+	SET_TARGET_PROPERTIES(server PROPERTIES
+		VS_DEBUGGER_WORKING_DIRECTORY "${Q2RTX_OUTPUT_DIR}")
+
+	IF(MSVC)
+		TARGET_COMPILE_OPTIONS(server PRIVATE /wd4005 /wd4996)
+	ENDIF()
+ELSE()
+	TARGET_LINK_LIBRARIES(server PRIVATE dl rt m pthread)
+ENDIF()
+
+# ======================================================================
+# Install
+# ======================================================================
+
+
+
+# ======================================================================
 
 SOURCE_GROUP("baseq2\\sources" FILES ${SRC_BASEQ2})
 SOURCE_GROUP("baseq2\\headers" FILES ${HEADERS_BASEQ2})
@@ -487,194 +683,7 @@ SOURCE_GROUP("common\\sources" FILES ${SRC_COMMON})
 SOURCE_GROUP("common\\headers" FILES ${HEADERS_COMMON})
 SOURCE_GROUP("refresh\\sources" FILES ${SRC_REFRESH} ${SRC_VKPT})
 SOURCE_GROUP("refresh\\headers" FILES ${HEADERS_VKPT})
-SOURCE_GROUP("refresh\\shaders" FILES ${SRC_SHADERS})
 SOURCE_GROUP("shared\\sources" FILES ${SRC_SHARED})
 SOURCE_GROUP("windows\\sources" FILES ${SRC_WINDOWS})
 SOURCE_GROUP("windows\\headers" FILES ${HEADERS_WINDOWS})
-
-IF (WIN32)
-    IF(TARGET client)
-        TARGET_INCLUDE_DIRECTORIES(client PRIVATE ../VC/inc)
-        TARGET_LINK_LIBRARIES(client winmm ws2_32)
-        SET_TARGET_PROPERTIES(client PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
-        # macro redefinition, deprecation
-        TARGET_COMPILE_OPTIONS(client PRIVATE /wd4005 /wd4996)
-    ENDIF()
-
-    TARGET_INCLUDE_DIRECTORIES(server PRIVATE ../VC/inc)
-    TARGET_INCLUDE_DIRECTORIES(baseq2 PRIVATE ../VC/inc)
-    TARGET_SOURCES(baseq2 PRIVATE windows/res/baseq2.rc)
-
-    TARGET_LINK_LIBRARIES(server winmm ws2_32)
-
-    SET_TARGET_PROPERTIES(server PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
-
-    # macro redefinition, deprecation
-    TARGET_COMPILE_OPTIONS(server PRIVATE /wd4005 /wd4996)
-    TARGET_COMPILE_OPTIONS(baseq2 PRIVATE /wd4005 /wd4996)
-ENDIF()
-
-TARGET_INCLUDE_DIRECTORIES(baseq2 PRIVATE ../inc)
-
-IF(TARGET client)
-    TARGET_INCLUDE_DIRECTORIES(client PRIVATE ../inc)
-    TARGET_INCLUDE_DIRECTORIES(client PRIVATE "${ZLIB_INCLUDE_DIRS}")
-ENDIF()
-
-TARGET_INCLUDE_DIRECTORIES(server PRIVATE ../inc)
-TARGET_INCLUDE_DIRECTORIES(server PRIVATE "${ZLIB_INCLUDE_DIRS}")
-
-# Use dynamic zlib for steam runtime
-if (CONFIG_LINUX_STEAM_RUNTIME_SUPPORT)
-    IF(TARGET client)
-        TARGET_LINK_LIBRARIES(client SDL2main SDL2-static z)
-    ENDIF()
-    TARGET_LINK_LIBRARIES(server z)
-else()
-    IF(TARGET client)
-        TARGET_LINK_LIBRARIES(client SDL2main SDL2-static zlibstatic)
-    ENDIF()
-    TARGET_LINK_LIBRARIES(server zlibstatic)
-endif()
-
-IF(UNIX)
-    TARGET_LINK_LIBRARIES(server dl rt m pthread)
-ENDIF()
-
-IF(TARGET client)
-    SET_TARGET_PROPERTIES(client
-        PROPERTIES
-        OUTPUT_NAME "q2rtx"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}"
-        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}"
-        RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}"
-        RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_SOURCE_DIR}"
-        DEBUG_POSTFIX ""
-    )
-ENDIF()
-
-SET_TARGET_PROPERTIES(server
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_SOURCE_DIR}"
-    DEBUG_POSTFIX ""
-)
-
-IF (IS_64_BIT)
-    SET_TARGET_PROPERTIES(server PROPERTIES OUTPUT_NAME "q2rtxded")
-ELSE()
-    SET_TARGET_PROPERTIES(server PROPERTIES OUTPUT_NAME "q2rtxded-x86")
-ENDIF()
-
-# specify both LIBRARY and RUNTIME because one works only on Windows and another works only on Linux
-
-SET_TARGET_PROPERTIES(baseq2
-    PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/baseq2"
-    LIBRARY_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/baseq2"
-    LIBRARY_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/baseq2"
-    LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/baseq2"
-    LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_SOURCE_DIR}/baseq2"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/baseq2"
-    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/baseq2"
-    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/baseq2"
-    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/baseq2"
-    RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_SOURCE_DIR}/baseq2"
-    PREFIX ""
-    DEBUG_POSTFIX ""
-)
-
-IF(IS_64_BIT)
-	IF(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-		SET_TARGET_PROPERTIES(baseq2
-			PROPERTIES
-			LIBRARY_OUTPUT_NAME "gameaarch64"
-			RUNTIME_OUTPUT_NAME "gameaarch64"
-		)
-	ELSE()
-		SET_TARGET_PROPERTIES(baseq2
-			PROPERTIES
-			LIBRARY_OUTPUT_NAME "gamex86_64"
-			RUNTIME_OUTPUT_NAME "gamex86_64"
-		)
-	ENDIF()
-ELSE()
-    SET_TARGET_PROPERTIES(baseq2
-        PROPERTIES
-        LIBRARY_OUTPUT_NAME "gamex86"
-        RUNTIME_OUTPUT_NAME "gamex86"
-    )
-ENDIF()
-
-IF(CONFIG_LINUX_PACKAGING_SUPPORT)
-    # Put the real game binary in /usr/share so we can have a wrapper in /usr/bin
-    IF(TARGET client)
-        INSTALL(TARGETS client DESTINATION share/quake2rtx/bin COMPONENT shareware)
-    ENDIF()
-    INSTALL(TARGETS server DESTINATION games COMPONENT shareware)
-
-    IF(NOT CONFIG_LINUX_PACKAGING_SKIP_PKZ)
-	    # Compress NVIDIA custom content
-	    INSTALL(CODE "set(SOURCE \"${CMAKE_SOURCE_DIR}\")"
-	        SCRIPT "${CMAKE_SOURCE_DIR}/setup/package_media.cmake"
-	        SCRIPT "${CMAKE_SOURCE_DIR}/setup/package_shaders.cmake"
-	        COMPONENT shareware)
-	ENDIF()
-    INSTALL(TARGETS baseq2 DESTINATION share/quake2rtx/baseq2 COMPONENT shareware)
-
-    # Package data files, including the shareware pak0 for demo levels
-    set (SHAREWARE_DATA_FILES_LIST
-        "${CMAKE_SOURCE_DIR}/baseq2/q2rtx_media.pkz"
-        "${CMAKE_SOURCE_DIR}/baseq2/shaders.pkz"
-        "${CMAKE_SOURCE_DIR}/baseq2/blue_noise.pkz"
-        "${CMAKE_SOURCE_DIR}/baseq2/shareware/pak0.pak"
-    )
-    INSTALL(FILES
-        ${SHAREWARE_DATA_FILES_LIST}
-        DESTINATION share/quake2rtx/baseq2
-        COMPONENT shareware)
-
-    # Package shareware player model
-    INSTALL(DIRECTORY
-        "${CMAKE_SOURCE_DIR}/baseq2/shareware/players"
-        DESTINATION share/quake2rtx/baseq2
-        COMPONENT shareware)
-
-    # Package the legal and info files
-    INSTALL(FILES
-        "${CMAKE_SOURCE_DIR}/license.txt"
-        "${CMAKE_SOURCE_DIR}/notice.txt"
-        "${CMAKE_SOURCE_DIR}/readme.md"
-        "${CMAKE_SOURCE_DIR}/changelog.md"
-        DESTINATION share/quake2rtx/
-        COMPONENT shareware)
-
-    # Package the icon/desktop file
-    INSTALL(FILES
-        "${CMAKE_SOURCE_DIR}/setup/q2rtx.desktop"
-        DESTINATION share/applications/
-        COMPONENT shareware)
-    INSTALL(FILES
-        "${CMAKE_SOURCE_DIR}/setup/q2rtx.png"
-        DESTINATION share/pixmaps/
-        COMPONENT shareware)
-
-    # Install Client Wrapper
-    INSTALL(FILES
-        "${CMAKE_SOURCE_DIR}/setup/q2rtx.sh"
-        DESTINATION games/
-        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-        COMPONENT shareware
-	RENAME q2rtx)
-
-    # Install PAK file finder
-    INSTALL(FILES
-        "${CMAKE_SOURCE_DIR}/setup/find-retail-paks.sh"
-        DESTINATION share/quake2rtx/bin
-        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-        COMPONENT shareware)
-ENDIF()
+SOURCE_GROUP("refresh\\shaders\\vkpt" FILES ${SHADERS_VKPT} ${SHADERS_RTX})
