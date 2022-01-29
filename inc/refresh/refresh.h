@@ -1,6 +1,7 @@
 /*
 Copyright (C) 1997-2001 Id Software, Inc.
 Copyright (C) 2019, NVIDIA CORPORATION. All rights reserved.
+Copyright (C) 2022, David Lin
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -299,6 +300,9 @@ void R_RegisterFunctionsGL();
 #endif
 #if REF_VKPT
 void R_RegisterFunctionsRTX();
+#endif
+#if REF_DX12
+void R_RegisterFunctionsDX12();
 #endif
 
 #endif // REFRESH_H
