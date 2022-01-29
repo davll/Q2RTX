@@ -381,7 +381,9 @@ set(SHADERS_VKPT_DEPS
 # Only build shaders in 64-bit builds, because the client
 # is also only built for 64-bit systems.
 IF(CONFIG_VKPT_RENDERER)
-	set (shader_outdir "${Q2RTX_OUTPUT_DIR}/baseq2/shader_vkpt")
+	set (shader_outdir "${CMAKE_BINARY_DIR}/shader_vkpt")
+	set (shader_pack "${Q2RTX_OUTPUT_DIR}/baseq2/vkpt_shaders.pkz")
+	set (shader_pack_dir "${Q2RTX_OUTPUT_DIR}/baseq2")
 
 	add_custom_target(vkpt_shaders_prebuild
 		COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_outdir}
@@ -453,7 +455,6 @@ IF(CONFIG_VKPT_RENDERER)
 				STAGE "comp")
 		endif()
 	endforeach()
-	add_custom_target(rtx_shaders DEPENDS ${rtx_shader_bytecode})
 
     # build VKPT shaders
 	set(vkpt_shader_bytecode)
@@ -463,7 +464,18 @@ IF(CONFIG_VKPT_RENDERER)
 			INCLUDES "-I${CMAKE_CURRENT_SOURCE_DIR}/refresh/vkpt/fsr"
 			OUTPUT_FILE_LIST vkpt_shader_bytecode)
 	endforeach()
-	add_custom_target(vkpt_shaders DEPENDS ${vkpt_shader_bytecode})
+
+	# generate compressed pack file
+	add_custom_command(OUTPUT "${shader_pack}"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${shader_pack_dir}"
+		COMMAND ${CMAKE_COMMAND} -E tar cvf "${shader_pack}" --format=zip
+			${vkpt_shader_bytecode} ${rtx_shader_bytecode}
+		WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+		DEPENDS ${vkpt_shader_bytecode} ${rtx_shader_bytecode})
+
+	# add target
+	add_custom_target(vkpt_shaders
+		DEPENDS "${shader_pack}")
 ENDIF()
 
 # Embed version number
@@ -515,6 +527,94 @@ IF(WIN32)
 	ENDIF()
 ELSE()
 ENDIF()
+
+IF(TARGET vkpt_shaders)
+	add_dependencies(baseq2 vkpt_shaders)
+ENDIF()
+
+# --------- config files --------------------
+
+add_custom_command(TARGET baseq2
+	POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/baseq2/pt_toggles.cfg"
+        "${CMAKE_SOURCE_DIR}/baseq2/q2rtx.cfg"
+        "${CMAKE_SOURCE_DIR}/baseq2/q2rtx.menu"
+        "${Q2RTX_OUTPUT_DIR}/baseq2")
+
+# --------- original asset files --------------------------
+
+IF(	(EXISTS "${CMAKE_SOURCE_DIR}/baseq2/players") AND
+	(EXISTS "${CMAKE_SOURCE_DIR}/baseq2/video") AND
+	(EXISTS "${CMAKE_SOURCE_DIR}/baseq2/pak0.pak") AND
+	(EXISTS "${CMAKE_SOURCE_DIR}/baseq2/pak1.pak") AND
+	(EXISTS "${CMAKE_SOURCE_DIR}/baseq2/pak2.pak"))
+	add_custom_command(TARGET baseq2
+		POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_SOURCE_DIR}/baseq2/players"
+			"${CMAKE_SOURCE_DIR}/baseq2/video"
+			"${CMAKE_SOURCE_DIR}/baseq2/pak0.pak"
+			"${CMAKE_SOURCE_DIR}/baseq2/pak1.pak"
+			"${CMAKE_SOURCE_DIR}/baseq2/pak2.pak"
+			"${Q2RTX_OUTPUT_DIR}/baseq2")
+ENDIF()
+
+# --------- blue noise files --------------------------
+
+add_custom_command(TARGET baseq2
+	POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"${CMAKE_SOURCE_DIR}/baseq2/blue_noise.pkz"
+		"${Q2RTX_OUTPUT_DIR}/baseq2")
+
+# --------- Package asset files --------------------------
+
+if(CONFIG_BUILD_RTX_ASSETS)
+
+	set(ASSET_SOURCES
+		${CMAKE_SOURCE_DIR}/baseq2/env
+		${CMAKE_SOURCE_DIR}/baseq2/maps
+		${CMAKE_SOURCE_DIR}/baseq2/models
+		${CMAKE_SOURCE_DIR}/baseq2/overrides
+		${CMAKE_SOURCE_DIR}/baseq2/pics
+		${CMAKE_SOURCE_DIR}/baseq2/sound
+		${CMAKE_SOURCE_DIR}/baseq2/sprites
+		${CMAKE_SOURCE_DIR}/baseq2/textures
+		${CMAKE_SOURCE_DIR}/baseq2/materials
+		${CMAKE_SOURCE_DIR}/baseq2/prefetch.txt
+		${CMAKE_SOURCE_DIR}/baseq2/sky_clusters.txt
+	)
+
+	set(ASSET_FILES)
+	foreach(asset_path ${ASSET_SOURCES})
+		if(IS_DIRECTORY ${asset_path})
+			file(GLOB_RECURSE files "${asset_path}/*")
+			set(ASSET_FILES ${ASSET_FILES} ${files})
+		else()
+			set(ASSET_FILES ${ASSET_FILES} ${asset_path})
+		endif()
+	endforeach()
+
+	set(ASSET_OUTPUT "${Q2RTX_OUTPUT_DIR}/baseq2/q2rtx_assets.pkz")
+
+	add_custom_command(OUTPUT "${ASSET_OUTPUT}"
+		#COMMAND ${CMAKE_COMMAND} -E make_directory "${Q2RTX_OUTPUT_DIR}/baseq2"
+		COMMAND ${CMAKE_COMMAND} -E tar cvf "${ASSET_OUTPUT}" --format=zip
+			${ASSET_SOURCES}
+		DEPENDS ${ASSET_FILES}
+		WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/baseq2"
+	)
+
+	add_custom_target(rtx_assets ALL DEPENDS "${ASSET_OUTPUT}")
+
+elseif(EXISTS "${CMAKE_SOURCE_DIR}/baseq2/q2rtx_assets.pkz")
+	add_custom_command(TARGET baseq2
+		POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_SOURCE_DIR}/baseq2/q2rtx_assets.pkz"
+			"${Q2RTX_OUTPUT_DIR}/baseq2")
+endif()
 
 # ======================================================================
 # Client
@@ -578,7 +678,6 @@ IF (CONFIG_VKPT_RENDERER)
 			VKPT_IMAGE_DUMPS)
 	ENDIF()
 	TARGET_LINK_LIBRARIES(client PRIVATE ${VULKAN_LIBRARY})
-	ADD_DEPENDENCIES(client vkpt_shaders rtx_shaders)
 ENDIF()
 
 TARGET_INCLUDE_DIRECTORIES(client PRIVATE ../inc)
