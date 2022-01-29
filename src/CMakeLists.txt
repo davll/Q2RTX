@@ -383,6 +383,10 @@ set(SHADERS_VKPT_DEPS
 IF(CONFIG_VKPT_RENDERER)
 	set (shader_outdir "${Q2RTX_OUTPUT_DIR}/baseq2/shader_vkpt")
 
+	add_custom_target(vkpt_shaders_prebuild
+		COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_outdir}
+		COMMENT "Prepare for VKPT shader builds")
+
 	function(compile_vkpt_shader)
 		set(options "")
 		set(oneValueArgs SOURCE_FILE OUTPUT_FILE_NAME OUTPUT_FILE_LIST OUTPUT_SUFFIX STAGE)
@@ -425,8 +429,8 @@ IF(CONFIG_VKPT_RENDERER)
 		add_custom_command(OUTPUT ${out_file}
 						DEPENDS ${src_file}
 						DEPENDS ${SHADER_SOURCE_DEPENDENCIES}
+						DEPENDS vkpt_shaders_prebuild
 						MAIN_DEPENDENCY ${src_file}
-						COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_outdir}
 						COMMAND ${GLSLANG_COMPILER} ${glslang_command_line})
 		
 		set(${params_OUTPUT_FILE_LIST} ${${params_OUTPUT_FILE_LIST}} ${out_file} PARENT_SCOPE)
