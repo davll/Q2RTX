@@ -372,7 +372,18 @@ set(SHADERS_VKPT_DEPS
     refresh/vkpt/shader/tone_mapping_utils.glsl
     refresh/vkpt/shader/utils.glsl
     refresh/vkpt/shader/vertex_buffer.h
-    refresh/vkpt/shader/water.glsl)
+    refresh/vkpt/shader/water.glsl
+)
+
+set(SRC_DX12
+	refresh/dx12/main.c
+)
+
+set(HEADERS_DX12
+)
+
+set(SHADERS_DX12
+)
 
 # ======================================================================
 # VKPT and RTX Shaders
@@ -661,6 +672,17 @@ IF (CONFIG_VKPT_RENDERER)
 			VKPT_IMAGE_DUMPS)
 	ENDIF()
 	TARGET_LINK_LIBRARIES(client PRIVATE ${VULKAN_LIBRARY})
+ENDIF()
+
+IF (CONFIG_DX12_RENDERER)
+	TARGET_SOURCES(client PRIVATE
+		${SRC_DX12} ${HEADERS_DX12})
+	TARGET_COMPILE_DEFINITIONS(client PRIVATE
+		REF_DX12=1
+		USE_REF=1)
+	TARGET_LINK_LIBRARIES(client PRIVATE
+		d3d12
+		dxgi)
 ENDIF()
 
 TARGET_INCLUDE_DIRECTORIES(client PRIVATE ../inc)

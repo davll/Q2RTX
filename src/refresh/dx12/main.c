@@ -33,8 +33,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "system/hunk.h"
 
 #include <SDL.h>
+#include <SDL_syswm.h>
 #include <dxgi.h>
 #include <d3d12.h>
+
+cvar_t *cvar_profiler = NULL;
+cvar_t *cvar_vsync = NULL;
+extern cvar_t *scr_viewsize;
 
 /* called when the library is loaded */
 bool
@@ -47,16 +52,41 @@ R_Init_DX12(bool total)
 		return false;
 	}
 
+	extern SDL_Window *sdl_window;
+	//qvk.window = sdl_window;
+
+	cvar_profiler = Cvar_Get("profiler", "0", 0);
+	cvar_vsync = Cvar_Get("vid_vsync", "0", CVAR_ARCHIVE);
+	cvar_vsync->changed = NULL; // in case the GL renderer has set it
+
+	scr_viewsize = Cvar_Get("viewsize", "100", CVAR_ARCHIVE);
+	scr_viewsize->changed = viewsize_changed;
+
     return true;
+
+fail:
+    VID_Shutdown();
+    return false;
 }
 
 /* called before the library is unloaded */
 void
 R_Shutdown_DX12(bool total)
 {
+	wait_device();
+
+	MAT_Shutdown();
+	IMG_FreeAll();
+	destroy_images();
+	destroy_shaders();
+	destroy_dx12();
+
+	IMG_Shutdown();
+	MOD_Shutdown(); // todo: currently leaks memory, need to clear submeshes
     VID_Shutdown();
 }
 
+/*
 void R_RegisterFunctionsDX12()
 {
 	R_Init = R_Init_DX12;
@@ -94,5 +124,6 @@ void R_RegisterFunctionsDX12()
 	MOD_LoadIQM = MOD_LoadIQM_DX12;
 	MOD_Reference = MOD_Reference_DX12;
 }
+*/
 
 // vim: shiftwidth=4 noexpandtab tabstop=4 cindent

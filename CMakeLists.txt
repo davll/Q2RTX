@@ -25,7 +25,7 @@ execute_process(
 # Config options
 OPTION(CONFIG_GL_RENDERER "Enable GL renderer" ON)
 # OPTION(CONFIG_VK_RENDERER "Enable VK renderer" ON)
-# OPTION(CONFIG_DX12_RENDERER "Enable DX12 renderer" ON)
+OPTION(CONFIG_DX12_RENDERER "Enable DX12 renderer" ${WIN32})
 OPTION(CONFIG_VKPT_RENDERER "Enable VKPT renderer" ON)
 OPTION(CONFIG_VKPT_ENABLE_DEVICE_GROUPS "Enable device groups (multi-gpu) support" ON)
 OPTION(CONFIG_VKPT_ENABLE_IMAGE_DUMPS "Enable image dumping functionality" OFF)
