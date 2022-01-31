@@ -52,10 +52,10 @@ find_package(SDL2 CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 
 find_path(VULKAN_INCLUDE "vulkan/vulkan.h"
-    HINTS "$ENV{VULKAN_SDK}"
+    HINTS "$ENV{VULKAN_SDK}/include"
     REQUIRED)
 find_library(VULKAN_LIBRARY vulkan vulkan-1
-    HINTS "$ENV{VULKAN_SDK}/Lib"
+    HINTS "$ENV{VULKAN_SDK}/lib"
     REQUIRED)
 
 find_program(GLSLANG_COMPILER "glslangValidator"
