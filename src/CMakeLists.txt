@@ -385,10 +385,6 @@ IF(CONFIG_VKPT_RENDERER)
 	set (shader_pack "${Q2RTX_OUTPUT_DIR}/baseq2/vkpt_shaders.pkz")
 	set (shader_pack_dir "${Q2RTX_OUTPUT_DIR}/baseq2")
 
-	add_custom_target(vkpt_shaders_prebuild
-		COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_outdir}
-		COMMENT "Prepare for VKPT shader builds")
-
 	function(compile_vkpt_shader)
 		set(options "")
 		set(oneValueArgs SOURCE_FILE OUTPUT_FILE_NAME OUTPUT_FILE_LIST OUTPUT_SUFFIX STAGE)
@@ -431,8 +427,8 @@ IF(CONFIG_VKPT_RENDERER)
 		add_custom_command(OUTPUT ${out_file}
 						DEPENDS ${src_file}
 						DEPENDS ${SHADER_SOURCE_DEPENDENCIES}
-						DEPENDS vkpt_shaders_prebuild
 						MAIN_DEPENDENCY ${src_file}
+						COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_outdir}
 						COMMAND ${GLSLANG_COMPILER} ${glslang_command_line})
 		
 		set(${params_OUTPUT_FILE_LIST} ${${params_OUTPUT_FILE_LIST}} ${out_file} PARENT_SCOPE)
@@ -542,36 +538,30 @@ add_custom_command(TARGET baseq2
         "${CMAKE_SOURCE_DIR}/baseq2/q2rtx.menu"
         "${Q2RTX_OUTPUT_DIR}/baseq2")
 
-# --------- original asset files --------------------------
+# --------- copy asset files --------------------------
 
-IF(	(EXISTS "${CMAKE_SOURCE_DIR}/baseq2/players") AND
-	(EXISTS "${CMAKE_SOURCE_DIR}/baseq2/video") AND
-	(EXISTS "${CMAKE_SOURCE_DIR}/baseq2/pak0.pak") AND
-	(EXISTS "${CMAKE_SOURCE_DIR}/baseq2/pak1.pak") AND
-	(EXISTS "${CMAKE_SOURCE_DIR}/baseq2/pak2.pak"))
-	add_custom_command(TARGET baseq2
-		POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${CMAKE_SOURCE_DIR}/baseq2/players"
-			"${CMAKE_SOURCE_DIR}/baseq2/video"
-			"${CMAKE_SOURCE_DIR}/baseq2/pak0.pak"
-			"${CMAKE_SOURCE_DIR}/baseq2/pak1.pak"
-			"${CMAKE_SOURCE_DIR}/baseq2/pak2.pak"
-			"${Q2RTX_OUTPUT_DIR}/baseq2")
-ENDIF()
+SET(ID_ASSETS
+	"players"
+	"video"
+	"q2rtx_assets.pkz"
+	"blue_noise.pkz"
+	"pak0.pak"
+	"pak1.pak"
+	"pak2.pak")
 
-# --------- blue noise files --------------------------
-
-add_custom_command(TARGET baseq2
-	POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy_if_different
-		"${CMAKE_SOURCE_DIR}/baseq2/blue_noise.pkz"
-		"${Q2RTX_OUTPUT_DIR}/baseq2")
+FOREACH(file_path ${ID_ASSETS})
+	IF(EXISTS "${CMAKE_SOURCE_DIR}/baseq2/${file_path}")
+		add_custom_command(TARGET baseq2
+			POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${CMAKE_SOURCE_DIR}/baseq2/${file_path}"
+				"${Q2RTX_OUTPUT_DIR}/baseq2")
+	ENDIF()
+ENDFOREACH()
 
 # --------- Package asset files --------------------------
 
 if(CONFIG_BUILD_RTX_ASSETS)
-
 	set(ASSET_SOURCES
 		${CMAKE_SOURCE_DIR}/baseq2/env
 		${CMAKE_SOURCE_DIR}/baseq2/maps
@@ -599,7 +589,7 @@ if(CONFIG_BUILD_RTX_ASSETS)
 	set(ASSET_OUTPUT "${Q2RTX_OUTPUT_DIR}/baseq2/q2rtx_assets.pkz")
 
 	add_custom_command(OUTPUT "${ASSET_OUTPUT}"
-		#COMMAND ${CMAKE_COMMAND} -E make_directory "${Q2RTX_OUTPUT_DIR}/baseq2"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${Q2RTX_OUTPUT_DIR}/baseq2"
 		COMMAND ${CMAKE_COMMAND} -E tar cvf "${ASSET_OUTPUT}" --format=zip
 			${ASSET_SOURCES}
 		DEPENDS ${ASSET_FILES}
@@ -607,13 +597,6 @@ if(CONFIG_BUILD_RTX_ASSETS)
 	)
 
 	add_custom_target(rtx_assets ALL DEPENDS "${ASSET_OUTPUT}")
-
-elseif(EXISTS "${CMAKE_SOURCE_DIR}/baseq2/q2rtx_assets.pkz")
-	add_custom_command(TARGET baseq2
-		POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${CMAKE_SOURCE_DIR}/baseq2/q2rtx_assets.pkz"
-			"${Q2RTX_OUTPUT_DIR}/baseq2")
 endif()
 
 # ======================================================================
