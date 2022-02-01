@@ -31,6 +31,7 @@ OPTION(CONFIG_VKPT_ENABLE_DEVICE_GROUPS "Enable device groups (multi-gpu) suppor
 OPTION(CONFIG_VKPT_ENABLE_IMAGE_DUMPS "Enable image dumping functionality" OFF)
 # OPTION(CONFIG_DXR_RENDERER "Enable DXR renderer" ON)
 OPTION(CONFIG_USE_CURL "Use CURL for HTTP support" ON)
+OPTION(CONFIG_BUILD_RTX_ASSETS "Pack RTX assets" OFF)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # --------- Dependencies -------------------------------------
