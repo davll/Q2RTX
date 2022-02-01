@@ -49,7 +49,7 @@ typedef struct m_player_s {
 
 static m_player_t    m_player;
 
-extern cvar_t       *vid_rtx;
+extern cvar_t       *vid_renderer;
 
 static const char *handedness[] = {
     "right",
@@ -333,7 +333,7 @@ void M_Menu_PlayerConfig(void)
     m_player.menu.free = Free;
 	m_player.menu.image = uis.backgroundHandle;
 
-	if (vid_rtx->integer)
+	if (vid_renderer->integer)
 	{
 		// Q2RTX: make the player menu transparent so that we can see 
 		// the model below: all 2D stuff is rendered after 3D, in stretch_pics.
@@ -362,7 +362,7 @@ void M_Menu_PlayerConfig(void)
     m_player.refdef.entities = m_player.entities;
     m_player.refdef.rdflags = RDF_NOWORLDMODEL;
 
-	if (vid_rtx->integer)
+	if (vid_renderer->integer)
 	{
 		m_player.refdef.num_dlights = sizeof(dlights) / sizeof(*dlights);
 		m_player.refdef.dlights = dlights;

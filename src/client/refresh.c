@@ -27,7 +27,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "refresh/models.h"
 
 // Console variables that we need to access from this module
-cvar_t      *vid_rtx;
+cvar_t      *vid_renderer;
 cvar_t      *vid_geometry;
 cvar_t      *vid_modelist;
 cvar_t      *vid_fullscreen;
@@ -309,12 +309,8 @@ void CL_InitRefresh(void)
 
     // Create the video variables so we know how to start the graphics drivers
 
-	vid_rtx = Cvar_Get("vid_rtx", 
-#if REF_VKPT
-		"1",
-#else
+	vid_renderer = Cvar_Get("vid_renderer", 
 		"0",
-#endif
 		CVAR_REFRESH | CVAR_ARCHIVE);
 
     vid_fullscreen = Cvar_Get("vid_fullscreen", "0", CVAR_ARCHIVE);
@@ -333,7 +329,7 @@ void CL_InitRefresh(void)
     Com_SetLastError(NULL);
 
 #if REF_GL && REF_VKPT
-	if (vid_rtx->integer)
+	if (vid_renderer->integer)
 		R_RegisterFunctionsRTX();
 	else
 		R_RegisterFunctionsGL();

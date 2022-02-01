@@ -560,7 +560,7 @@ value is 0 (don't switch video modes).
 Instructs the video driver to use hardware gamma correction for
 implementing `vid_gamma`.  Default value is 0 (use software gamma).
 
-#### `vid_rtx`
+#### `vid_renderer`
 Switches between the OpenGL (0) and Vulkan RTX (1) renderers.
 Default value is 1.
 
