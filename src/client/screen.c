@@ -753,7 +753,7 @@ static void SCR_DrawFPS(void)
 	int scale = CL_GetResolutionScale();
 
 	char buffer[MAX_QPATH];
-	if (scr_fps->integer == 2 && vid_rtx->integer)
+	if (scr_fps->integer == 2 && vid_renderer->integer == VID_REF_VKPT)
 		Q_snprintf(buffer, MAX_QPATH, "%d FPS at %3d%%", fps, scale);
 	else
 		Q_snprintf(buffer, MAX_QPATH, "%d FPS", fps);

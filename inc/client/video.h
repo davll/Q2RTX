@@ -1,6 +1,7 @@
 /*
 Copyright (C) 2003-2006 Andrey Nazarov
 Copyright (C) 2019, NVIDIA CORPORATION. All rights reserved.
+Copyright (C) 2020, David Lin
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -20,7 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef VIDEO_H
 #define VIDEO_H
 
-extern cvar_t       *vid_rtx;
+extern cvar_t       *vid_renderer;
 extern cvar_t       *vid_geometry;
 extern cvar_t       *vid_modelist;
 extern cvar_t       *vid_fullscreen;
@@ -33,7 +34,11 @@ void VID_PumpEvents(void);
 void VID_SetMode(void);
 char *VID_GetDefaultModeList(void);
 
-typedef enum { GAPI_OPENGL, GAPI_VULKAN } graphics_api_t;
+typedef enum {
+    GAPI_OPENGL,
+    GAPI_VULKAN,
+    GAPI_D3D12,
+} graphics_api_t;
 
 bool    VID_Init(graphics_api_t api);
 void    VID_Shutdown(void);

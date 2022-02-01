@@ -121,7 +121,7 @@ begin video
     background #212F3CD0
     style --compact
     banner m_banner_video
-	pairs "renderer" vid_rtx opengl 0 rtx 1
+	pairs "renderer" vid_renderer $vid_rendererlist
     values -s "use LEFT and RIGHT keys to select" "video mode" vid_fullscreen windowed $$vid_modelist
     pairs "full screen display" vid_display $vid_displaylist
     toggle "vertical sync" vid_vsync
@@ -129,7 +129,7 @@ begin video
     range -f "%.0f deg" "field of view" fov 60 120 5
     blank
 
-    ifeq vid_rtx 1
+    ifeq vid_renderer 1
         action "resolution scaling options..." pushmenu resolution
         action "HDR options..." pushmenu hdr
         blank
@@ -159,7 +159,7 @@ begin video
         toggle "GPU profiler" profiler
     endif
 
-    ifneq vid_rtx 1
+    ifeq vid_renderer 0
         range "texture gamma" vid_gamma 1.3 0.3
         toggle "hardware gamma" vid_hwgamma
         range "texture quality" gl_picmip 3 0 -1
@@ -183,7 +183,7 @@ begin options
     background #212F3CD0
     style --compact
     banner m_banner_options
-    ifeq vid_rtx 1
+    ifeq vid_renderer 1
         action "environment setup" pushmenu environment
     endif
     action "graphics settings" pushmenu video
@@ -243,7 +243,7 @@ begin effects
     style --compact
     title "Effects Setup"
     blank
-    ifneq vid_rtx 1
+    ifeq vid_renderer 0
         values "dynamic lighting" gl_dynamic "no" "yes" "only switchable"
         values "entity cel-shading" gl_celshading no 1x 2x 3x
         toggle "entity glowing" cl_noglow ~

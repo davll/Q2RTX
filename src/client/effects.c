@@ -448,7 +448,7 @@ void CL_MuzzleFlash(void)
 	// Q2RTX
     }
 
-	if (vid_rtx->integer)
+	if (vid_renderer->integer == VID_REF_VKPT)
 	{
 		// don't add muzzle flashes in RTX mode
 		DL_RADIUS(0.f);
