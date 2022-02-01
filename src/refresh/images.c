@@ -1283,7 +1283,7 @@ static int find_or_load_image(const char *name, size_t len,
     }
 
 	int override_textures = !!r_override_textures->integer;
-	if (!vid_renderer->integer && (type != IT_PIC) && !gl_use_hd_assets->integer)
+	if (!vid_renderer->integer == VID_REF_VKPT && (type != IT_PIC) && !gl_use_hd_assets->integer)
 		override_textures = 0;
     if (flags & IF_EXACT)
         override_textures = 0;

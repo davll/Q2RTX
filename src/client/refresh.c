@@ -28,6 +28,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 // Console variables that we need to access from this module
 cvar_t      *vid_renderer;
+cvar_t      *vid_rendererlist;
 cvar_t      *vid_geometry;
 cvar_t      *vid_modelist;
 cvar_t      *vid_fullscreen;
@@ -43,6 +44,8 @@ int registration_sequence;
 #define MODE_MODELIST   4
 
 static int  mode_changed;
+
+static void R_GetRendererList();
 
 /*
 ==========================================================================
@@ -309,9 +312,10 @@ void CL_InitRefresh(void)
 
     // Create the video variables so we know how to start the graphics drivers
 
-	vid_renderer = Cvar_Get("vid_renderer", 
-		"0",
-		CVAR_REFRESH | CVAR_ARCHIVE);
+    vid_rendererlist = Cvar_Get("vid_rendererlist", "\"unknown\" 0", CVAR_ROM);
+    R_GetRendererList();
+
+	vid_renderer = Cvar_Get("vid_renderer",  "0", CVAR_REFRESH | CVAR_ARCHIVE);
 
     vid_fullscreen = Cvar_Get("vid_fullscreen", "0", CVAR_ARCHIVE);
     _vid_fullscreen = Cvar_Get("_vid_fullscreen", "1", CVAR_ARCHIVE);
@@ -328,18 +332,18 @@ void CL_InitRefresh(void)
 
     Com_SetLastError(NULL);
 
-#if REF_GL && REF_VKPT
-	if (vid_renderer->integer)
-		R_RegisterFunctionsRTX();
-	else
-		R_RegisterFunctionsGL();
-#elif REF_GL
-	R_RegisterFunctionsGL();
-#elif REF_VKPT
-	R_RegisterFunctionsRTX();
-#else
-#error "REF_GL and REF_VKPT are both disabled, at least one has to be enableds"
+    R_Init = NULL;
+    if (false);
+#if REF_GL
+    else if (vid_renderer->integer == VID_REF_GL)
+        R_RegisterFunctionsGL();
 #endif
+#if REF_VKPT
+    else if (vid_renderer->integer == VID_REF_VKPT)
+        R_RegisterFunctionsRTX();
+#endif
+    else
+        Com_Error(ERR_FATAL, "Unknown renderer: %d", vid_renderer->integer);
 
     if (!R_Init(true)) {
         Com_Error(ERR_FATAL, "Couldn't initialize refresh: %s", Com_GetLastError());
@@ -454,4 +458,27 @@ float R_ClampScale(cvar_t *var)
 		return 0.5f;
 
 	return 1.0f;
+}
+
+static void R_GetRendererList()
+{
+    int string_size = 1;
+#if !REF_GL && !REF_VKPT
+#error "At least one of refresher has to be enabled"
+#endif
+#if REF_GL
+    string_size += strlen(VID_REFNAME_GL) + 12;
+#endif
+#if REF_VKPT
+    string_size += strlen(VID_REFNAME_VKPT) + 12;
+#endif
+    char *renderer_list = Z_Malloc(string_size);
+    memset(renderer_list, 0, string_size);
+#if REF_GL
+    Q_strlcat(renderer_list, va("\"%s\" %d ", VID_REFNAME_GL, VID_REF_GL), string_size);
+#endif
+#if REF_VKPT
+    Q_strlcat(renderer_list, va("\"%s\" %d ", VID_REFNAME_VKPT, VID_REF_VKPT), string_size);
+#endif
+    Cvar_SetByVar(vid_rendererlist, renderer_list, FROM_CODE);
 }

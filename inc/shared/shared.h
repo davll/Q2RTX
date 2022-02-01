@@ -123,6 +123,14 @@ typedef enum {
     MULTICAST_PVS_R
 } multicast_t;
 
+// renderer IDs
+#define VID_REF_GL 0
+#define VID_REF_VKPT 1
+
+// renderer names
+#define VID_REFNAME_GL "OpenGL"
+#define VID_REFNAME_VKPT "Vulkan RTX"
+
 /*
 ==============================================================
 

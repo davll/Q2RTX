@@ -333,7 +333,7 @@ void M_Menu_PlayerConfig(void)
     m_player.menu.free = Free;
 	m_player.menu.image = uis.backgroundHandle;
 
-	if (vid_renderer->integer)
+	if (vid_renderer->integer == VID_REF_VKPT)
 	{
 		// Q2RTX: make the player menu transparent so that we can see 
 		// the model below: all 2D stuff is rendered after 3D, in stretch_pics.
@@ -362,7 +362,7 @@ void M_Menu_PlayerConfig(void)
     m_player.refdef.entities = m_player.entities;
     m_player.refdef.rdflags = RDF_NOWORLDMODEL;
 
-	if (vid_renderer->integer)
+	if (vid_renderer->integer == VID_REF_VKPT)
 	{
 		m_player.refdef.num_dlights = sizeof(dlights) / sizeof(*dlights);
 		m_player.refdef.dlights = dlights;

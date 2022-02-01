@@ -121,7 +121,7 @@ begin video
     background #212F3CD0
     style --compact
     banner m_banner_video
-	pairs "renderer" vid_renderer "OpenGL" 0 "Vulkan RTX" 1 "Direct3D 12" 2
+	pairs "renderer" vid_renderer $vid_rendererlist
     values -s "use LEFT and RIGHT keys to select" "video mode" vid_fullscreen windowed $$vid_modelist
     pairs "full screen display" vid_display $vid_displaylist
     toggle "vertical sync" vid_vsync
