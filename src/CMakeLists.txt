@@ -542,7 +542,9 @@ add_custom_command(TARGET baseq2
 
 SET(ID_ASSETS
 	"players"
+	"players.pkz"
 	"video"
+	"video.pkz"
 	"q2rtx_assets.pkz"
 	"blue_noise.pkz"
 	"pak0.pak"
